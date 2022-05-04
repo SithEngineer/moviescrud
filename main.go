@@ -1,14 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
 	"strconv"
 
-	"github.com/gorilla/mux"
+	"github.com/gin-gonic/gin"
 )
 
 type Movie struct {
@@ -32,54 +31,46 @@ func injectDummyData() {
 	)
 }
 
-func getMovies(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(movies)
+func getMovies(c *gin.Context) {
+	c.JSON(200, movies)
 }
 
-func deleteMovie(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	params := mux.Vars(r)
+func deleteMovie(c *gin.Context) {
 	for index, item := range movies {
-		if item.ID == params["id"] {
+		if item.ID == c.Param("id") {
 			movies = append(movies[:index], movies[index+1:]...)
 			break
 		}
 	}
-	json.NewEncoder(w).Encode(movies)
+	c.JSON(200, movies)
 }
 
-func getMovie(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	params := mux.Vars(r)
+func getMovie(c *gin.Context) {
 	for _, item := range movies {
-		if item.ID == params["id"] {
-			json.NewEncoder(w).Encode(item)
+		if item.ID == c.Param("id") {
+			c.JSON(http.StatusOK, item)
 			break
 		}
 	}
 }
 
-func createMovie(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func createMovie(c *gin.Context) {
 	var movie Movie
-	_ = json.NewDecoder(r.Body).Decode(&movie)
+	c.BindJSON(&movie)
 	movie.ID = strconv.Itoa(rand.Int())
 	movies = append(movies, movie)
-	json.NewEncoder(w).Encode(movie)
+	c.JSON(http.StatusCreated, movie)
 }
 
-func updateMovie(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	params := mux.Vars(r)
+func updateMovie(c *gin.Context) {
 	for index, movie := range movies {
-		if movie.ID == params["id"] {
+		if movie.ID == c.Param("id") {
 			movies = append(movies[:index], movies[index+1:]...)
 			var movie Movie
-			json.NewDecoder(r.Body).Decode(&movie)
-			movie.ID = params["id"]
+			c.BindJSON(&movie)
+			movie.ID = c.Param("id")
 			movies = append(movies, movie)
-			json.NewEncoder(w).Encode(movie)
+			c.JSON(200, movie)
 			return
 		}
 	}
@@ -88,15 +79,15 @@ func updateMovie(w http.ResponseWriter, r *http.Request) {
 func main() {
 	injectDummyData()
 
-	r := mux.NewRouter()
+	router := gin.Default()
 
-	r.HandleFunc("/movies", getMovies).Methods("GET")
-	r.HandleFunc("/movies/{id}", getMovie).Methods("GET")
-	r.HandleFunc("/movies", createMovie).Methods("POST")
-	r.HandleFunc("/movies/{id}", updateMovie).Methods("PUT")
-	r.HandleFunc("/movies/{id}", deleteMovie).Methods("DELETE")
+	router.GET("/movies", getMovies)
+	router.GET("/movies/:id", getMovie)
+	router.POST("/movies", createMovie)
+	router.PUT("/movies/:id", updateMovie)
+	router.DELETE("/movies/:id", deleteMovie)
 
 	port := 8000
 	fmt.Printf("Starting server at port %d\n", port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), r))
+	log.Fatal(router.Run(fmt.Sprintf(":%d", port)))
 }
