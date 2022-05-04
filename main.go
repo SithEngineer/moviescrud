@@ -7,7 +7,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
 type Movie struct {
@@ -31,63 +32,69 @@ func injectDummyData() {
 	)
 }
 
-func getMovies(c *gin.Context) {
-	c.JSON(200, movies)
+func getMovies(c *fiber.Ctx) error {
+	c.JSON(movies)
+	return nil
 }
 
-func deleteMovie(c *gin.Context) {
+func deleteMovie(c *fiber.Ctx) error {
 	for index, item := range movies {
-		if item.ID == c.Param("id") {
+		if item.ID == c.Params("id") {
 			movies = append(movies[:index], movies[index+1:]...)
 			break
 		}
 	}
-	c.JSON(200, movies)
+	c.JSON(movies)
+	return nil
 }
 
-func getMovie(c *gin.Context) {
+func getMovie(c *fiber.Ctx) error {
 	for _, item := range movies {
-		if item.ID == c.Param("id") {
-			c.JSON(http.StatusOK, item)
-			break
+		if item.ID == c.Params("id") {
+			c.JSON(item)
+			return nil
 		}
 	}
+	return fiber.ErrBadRequest
 }
 
-func createMovie(c *gin.Context) {
+func createMovie(c *fiber.Ctx) error {
 	var movie Movie
-	c.BindJSON(&movie)
+	c.BodyParser(&movie)
 	movie.ID = strconv.Itoa(rand.Int())
 	movies = append(movies, movie)
-	c.JSON(http.StatusCreated, movie)
+	c.Status(http.StatusCreated).JSON(movie)
+	return nil
 }
 
-func updateMovie(c *gin.Context) {
+func updateMovie(c *fiber.Ctx) error {
 	for index, movie := range movies {
-		if movie.ID == c.Param("id") {
+		if movie.ID == c.Params("id") {
 			movies = append(movies[:index], movies[index+1:]...)
 			var movie Movie
-			c.BindJSON(&movie)
-			movie.ID = c.Param("id")
+			c.BodyParser(&movie)
+			movie.ID = c.Params("id")
 			movies = append(movies, movie)
-			c.JSON(200, movie)
-			return
+			c.Status(http.StatusAccepted).JSON(movie)
+			return nil
 		}
 	}
+	return fiber.ErrBadRequest
 }
 
 func main() {
 	injectDummyData()
 
-	router := gin.Default()
+	app := fiber.New()
+	app.Use(logger.New())
 
-	router.GET("/movies", getMovies)
-	router.GET("/movies/:id", getMovie)
-	router.POST("/movies", createMovie)
-	router.PUT("/movies/:id", updateMovie)
-	router.DELETE("/movies/:id", deleteMovie)
+	app.Get("/movies", getMovies)
+	app.Get("/movies/:id", getMovie)
+	app.Post("/movies", createMovie)
+	app.Put("/movies/:id", updateMovie)
+	app.Delete("/movies/:id", deleteMovie)
 
 	port := 8000
 	fmt.Printf("Starting server at port %d\n", port)
-	log.Fatal(router.Run(fmt.Sprintf(":%d", port)))
+	log.Fatal(app.Listen(fmt.Sprintf(":%d", port)))
 }
